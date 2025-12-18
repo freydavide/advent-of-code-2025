@@ -1,5 +1,19 @@
 import time
-import copy
+
+class Node:
+    def __init__(self, name):
+        self.name = name
+        self.parents = []
+        self.children = []
+        self.value = 0
+        self.in_edge = []
+        self.out_edge = []
+
+class Edge:
+    def __init__(self, start: Node, end: Node, start_value=0):
+        self.start = start
+        self.end = end
+        self.value = start_value
 
 def decode_data(data: list):
     inputs = []
@@ -11,114 +25,165 @@ def decode_data(data: list):
 
     return inputs, outputs
 
-def path_constructor(start_index: int, inputs: list, outputs: list, nr_paths: list):
-    for out in outputs[start_index]:
-        if out == 'out':
-            # Finish recursion loop
-            nr_paths[0] += 1
+def generate_graph(in_data, out_data):
+    # Create graph
+    graph = []
+
+    for node_name in in_data:
+        new_node = Node(node_name)
+        graph.append(new_node)
+
+    # Assign children
+    for i, node in enumerate(graph):
+        for child in out_data[i]:
+            if child != '!':
+                child_idx = in_data.index(child)
+                child_node = graph[child_idx]
+                node.children.append(child_node)
+
+    # Assign parents
+    for i, node in enumerate(graph):
+        parents_indices = [i for i, outputs in enumerate(out_data) if node.name in outputs]
+
+        for parent_idx in parents_indices:
+            parent_node = graph[parent_idx]
+            node.parents.append(parent_node)
+
+    # Assign edges
+    for i, ins in enumerate(in_data):
+        for outs in out_data[i]:
+            if outs != '!':
+                out_idx = in_data.index(outs)
+                new_edge = Edge(graph[i], graph[out_idx])
+                graph[i].out_edge.append(new_edge)
+                graph[out_idx].in_edge.append(new_edge)
+
+    return graph
+
+def search_node(graph: list, name: str) -> int | None:
+    # Return index of node with certain name
+
+    for i, node in enumerate(graph):
+        if node.name == name:
+            return i
+
+def djisktra_recursive(graph: list, end_idx: int):
+    tmp_graph = graph.copy()
+
+    end_node = tmp_graph.pop(end_idx)
+
+    for edge in end_node.in_edge:
+        # Assign value = 1 to the in-edges of the end node
+        edge.value = 1
+
+    # Start loop
+    while len(tmp_graph) > 0:
+        current_node = tmp_graph.pop(0)
+        no_children_flag = True
+        for child in current_node.children:
+            if child in tmp_graph:
+                # Children not checked yet, to be re-done afterwards
+                no_children_flag = False
+                break
+
+        if current_node.children == [] or no_children_flag:
+            # Update in-edge values
+            new_value = sum([x.value for x in current_node.out_edge])
+            for in_edge in current_node.in_edge:
+                in_edge.value = new_value
+
+            # Update node value
+            current_node.value = new_value
         else:
-            # Search next connection in the total list
-            idx_next = inputs.index(out)
+            # Node not ready for analysis, re-add it to the list
+            tmp_graph.append(current_node)
 
-            # Continue with the recursion until "out" is found
-            path_constructor(idx_next, inputs, outputs, nr_paths)
-
-def path_constructor_dac_fft(start_index: int, inputs: list, outputs: list, nr_paths: list, flag_dac: bool, flag_fft:bool, visited_nodes: list):
-    tmp_visited_nodes = copy.deepcopy(visited_nodes)
-    for out in outputs[start_index]:
-        if out == 'out':
-            # Finish recursion loop
-
-            # Check if flags are true, if not, do not increase the counter.
-            if flag_dac and flag_fft:
-                nr_paths[0] += 1
-                print('Found one')
-        else:
-            if out == 'dac':
-                flag_dac = True
-            elif out == 'fft':
-                flag_fft = True
-
-            # Search next connection in the total list
-            idx_next = inputs.index(out)
-
-            if out in visited_nodes:
-                # Nodes already visited, we are in a loop. Break.
-                print('Circular loop, quit path')
-            else:
-                # Continue with the recursion until "out" is found
-                visited_nodes.append(out)
-                path_constructor_dac_fft(idx_next, inputs, outputs, nr_paths, flag_dac, flag_fft, visited_nodes)
-
-                # Restore original visited_nodes for the new path
-                visited_nodes = copy.deepcopy(tmp_visited_nodes)
-
-def reverse_recursion(start_index: int, inputs: list, outputs: list, nr_paths: list, flag_dac: bool, flag_fft:bool):
-    for ins in inputs[start_index]:
-        if ins == 'svr':
-            # Finish recursion loop
-            # Check if flags are true, if not, do not increase the counter.
-            if flag_dac and flag_fft:
-                nr_paths[0] += 1
-        else:
-            if ins == 'dac':
-                flag_dac = True
-            elif ins == 'fft':
-                flag_fft = True
-
-            # Search next connections in the total list
-            indices = [i for i, x in enumerate(outputs) if x == "whatever"]
-            idx_next = inputs.index(out)
-
-            # Continue with the recursion until "out" is found
-            path_constructor_dac_fft(idx_next, inputs, outputs, nr_paths, flag_dac, flag_fft)
-
-def path_constructor_new_end(end: str, start_index: int, inputs: list, outputs: list, nr_paths_ending_in_out: list, nr_paths_ending_in_end: list):
-    for out in outputs[start_index]:
-        if out == 'out':
-            # Ending in out before reaching the wanted end
-            nr_paths_ending_in_out[0] += 1
-        elif out == end:
-            nr_paths_ending_in_end[0] += 1
-
-        else:
-            # Search next connection in the total list
-            idx_next = inputs.index(out)
-
-            # Continue with the recursion until "out" is found
-            path_constructor_new_end(end, idx_next, inputs, outputs, nr_paths_ending_in_out, nr_paths_ending_in_end)
-
-# PART 2
 
 start_time = time.time()
 
 password = 0
-filename = 'data/input.txt'
+filename = 'data/input-part-2.txt'
 
 with open(filename, 'r') as f:
-    data_ = f.readlines()
+    data = f.readlines()
 
-in_data, out_data = decode_data(data_)
-
-nr_of_paths = [0]
-
-# Check paths from fft to dac and viceversa
-nr_of_paths_dac_fft = [0]
-nr_of_paths_dac_out = [0]
-path_constructor_new_end('fft', in_data.index('dac'), in_data, out_data, nr_of_paths_dac_out, nr_of_paths_dac_fft)
-print(nr_of_paths_dac_fft)
-print(nr_of_paths_dac_out)
-
-nr_of_paths_fft_dac = [0]
-nr_of_paths_fft_out = [0]
-path_constructor_new_end('dac', in_data.index('fft'), in_data, out_data, nr_of_paths_dac_out, nr_of_paths_dac_fft)
-print(nr_of_paths_fft_dac)
-print(nr_of_paths_fft_out)
+in_data, out_data = decode_data(data)
 
 
-# Find the 'svr' path start point
-idx_start = in_data.index('svr')
-path_constructor_dac_fft(idx_start, in_data, out_data, nr_of_paths, False, False, ['svr'])
+# END NODE: OUT
+graph = generate_graph(in_data, out_data)
 
-print('Part 2 solution: ', nr_of_paths[0])
+# Search ending node
+end_idx = search_node(graph, 'out')
+
+# Set nr of path to ending node to 1 and children to []
+djisktra_recursive(graph, end_idx)
+
+# Nr of path [dac --> out]
+idx_dac = search_node(graph, 'dac')
+paths_dac_out = graph[idx_dac].value
+print('DAC -> OUT', paths_dac_out)
+
+# Nr of path [fft --> out]
+idx_fft = search_node(graph, 'fft')
+paths_fft_out = graph[idx_fft].value
+print('FFT -> OUT', paths_fft_out)
+
+# Nr of path [svr --> out]
+idx_svr = search_node(graph, 'svr')
+paths_svr_out = graph[idx_svr].value
+print('SVR -> OUT', paths_svr_out)
+
+# Clean graph variable
+del graph
+
+
+# END NODE: FFT
+graph = generate_graph(in_data, out_data)
+
+# Search ending node
+end_idx = search_node(graph, 'fft')
+
+# Set nr of path to ending node to 1 and children to []
+graph[end_idx].children = []
+graph[end_idx].out_edge = []
+djisktra_recursive(graph, end_idx)
+
+# Nr of path [dac --> fft]
+idx_dac = search_node(graph, 'dac')
+paths_dac_fft = graph[idx_dac].value
+print('DAC -> FFT', paths_dac_fft)
+
+# Nr of path [svr --> fft]
+idx_svr = search_node(graph, 'svr')
+paths_svr_fft = graph[idx_svr].value
+print('SVR -> FFT', paths_svr_fft)
+
+# Clean graph variable
+del graph
+
+
+# END NODE: DAC
+graph = generate_graph(in_data, out_data)
+
+# Search ending node
+end_idx = search_node(graph, 'dac')
+
+# Set nr of path to ending node to 1 and children to []
+graph[end_idx].children = []
+graph[end_idx].out_edge = []
+djisktra_recursive(graph, end_idx)
+
+# Nr of path [fft --> dac]
+idx_fft = search_node(graph, 'fft')
+paths_fft_dac = graph[idx_fft].value
+print('FFT -> DAC', paths_fft_dac)
+
+# Nr of path [svr --> dac]
+idx_svr = search_node(graph, 'svr')
+paths_svr_dac = graph[idx_svr].value
+print('SVR -> DAC', paths_svr_dac)
+
+
+print('Part 2 solution: ', paths_svr_fft*paths_fft_dac*paths_dac_out + paths_svr_dac*paths_dac_fft*paths_fft_out)
 print('Elapsed time:', time.time()-start_time, 'seconds')
